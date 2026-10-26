@@ -103,6 +103,39 @@ test("resume separates facts from hypotheses and degrades when nothing is open",
   assert.equal(listWork({ includeArchived: true }).some((item) => item.id === started.item.id), true);
 });
 
+test("completed history does not hide or duplicate an older open item", () => {
+  const open = startWork({ project: "lumen", title: "Keep the lamp brief", goal: "Write the brief", client_id: "client-a" });
+  updateWork(open.item.id, { append_completed_step: "Drafted the first paragraph", client_id: "client-a" });
+  updateWork(open.item.id, { append_completed_step: "Checked the caption budget", client_id: "client-a" });
+  updateWork(open.item.id, {
+    append_failed_attempt: "Tried a 12-page draft",
+    append_open_issue: "Caption length is undecided",
+    append_next_action: "Ask the editor",
+    client_id: "client-a",
+  });
+  for (let i = 0; i < 201; i++) {
+    const filler = startWork({ project: "lumen", title: `Finished note ${i}`, goal: `Filler ${i}`, separate: true, client_id: "client-a" });
+    updateWork(filler.item.id, { status: "completed", client_id: "client-a" });
+  }
+  const resumed = resumeWork({ project: "lumen" });
+  assert.equal(resumed.found, true);
+  assert.equal(resumed.work?.id, open.item.id);
+  assert.deepEqual(resumed.handoff.done.map((step) => step.text), ["Drafted the first paragraph", "Checked the caption budget"]);
+  assert.equal(resumed.handoff.failed.length, 1);
+  assert.equal(resumed.summary?.open_issues.includes("Caption length is undecided"), true);
+  assert.equal(resumed.handoff.blockers.some((row) => row.label === "open_issue" && row.text === "Caption length is undecided"), true);
+  assert.equal(resumed.handoff.facts.some((fact) => fact.text.includes("Caption length")), false);
+  assert.equal(resumed.handoff.hypotheses.length, 0);
+  const again = startWork({ project: "Lumen", title: "keep the lamp brief", goal: "A second client must not open an empty copy", client_id: "client-b" });
+  assert.equal(again.action, "existing");
+  assert.equal(again.item.id, open.item.id);
+  assert.equal(again.item.open_issues.length, 1);
+  assert.equal(again.item.completed_steps.length, 2);
+  const listed = listWork({ project: "lumen", limit: 3, preferOpen: true });
+  assert.equal(listed[0]?.id, open.item.id);
+  assert.equal(listed[0]?.status, "active");
+});
+
 test("a failed transaction does not keep the row", () => {
   const before = getDb().prepare("select count(*) as n from work_items").get() as { n: number };
   assert.throws(() =>

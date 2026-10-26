@@ -197,6 +197,8 @@ app.get("/api/work", (c) => {
       ...(workStatus ? { status: workStatus } : {}),
       ...(q ? { q } : {}),
       includeArchived,
+      preferOpen: !workStatus,
+      limit: 200,
     }),
   });
 });

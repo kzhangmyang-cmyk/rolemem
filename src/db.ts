@@ -168,10 +168,23 @@ export function migrateDatabase(database: DatabaseSync, opts?: { publish?: boole
       create trigger if not exists memories_fts_au_ins after update on memories when new.status = 'active' begin
         insert into memories_fts(content, id) values (new.content, new.id);
       end;
-      delete from memories_fts;
-      insert into memories_fts(content, id) select content, id from memories where status = 'active';
     `);
-    fts5 = true;
+    database.exec("begin immediate");
+    try {
+      database.exec(`
+        delete from memories_fts;
+        insert into memories_fts(content, id) select content, id from memories where status = 'active';
+      `);
+      database.exec("commit");
+      fts5 = true;
+    } catch (err) {
+      try {
+        database.exec("rollback");
+      } catch {
+        /* the transaction may already be closed */
+      }
+      throw err;
+    }
   } catch (err) {
     fts5 = false;
     fts5Error = err instanceof Error ? err.message : String(err);

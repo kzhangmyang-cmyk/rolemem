@@ -1,3 +1,4 @@
+import { HttpError } from "../db.ts";
 import { memoryById, recall } from "../memory/store.ts";
 import type { Memory } from "../memory/types.ts";
 import { latestOpenWork, listWork, requireWork } from "./store.ts";
@@ -107,7 +108,8 @@ export function resumeWork(input: { work_id?: string; project?: string; query?: 
   if (requested) {
     try {
       item = requireWork(requested);
-    } catch {
+    } catch (err) {
+      if (!(err instanceof HttpError) || err.status !== 404) throw err;
       missingId = true;
     }
   } else {

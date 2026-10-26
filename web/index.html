@@ -166,7 +166,7 @@ async function refresh(opts = {}) {
       api("GET", `/api/memories${suffix}`),
       api("GET", "/api/connections"),
       api("GET", "/api/digest"),
-      api("GET", "/api/work?include_archived=1"),
+      api("GET", state.workFilter ? `/api/work?status=${encodeURIComponent(state.workFilter)}` : "/api/work"),
       api("GET", "/api/conflicts"),
       api("GET", "/api/audit?limit=20"),
     ]);
@@ -251,7 +251,7 @@ function workCard(item) {
     <p class="content">${esc(item.goal)}</p>
     ${item.progress_summary ? `<p class="content">${esc(item.progress_summary)}</p>` : ""}
     ${item.current_step ? `<p class="meta">Current step: ${esc(item.current_step)}</p>` : ""}
-    ${item.next_actions?.[0] ? `<p class="meta">Next: ${esc(item.next_actions[0].text)}</p>` : `<p class="meta">Next: none recorded</p>`}
+    ${item.next_actions?.length ? `<p class="meta">Next: ${esc(item.next_actions[item.next_actions.length - 1].text)}</p>` : `<p class="meta">Next: none recorded</p>`}
     <div class="row">
       <button type="button" data-work-open="${esc(item.id)}">${open ? "Hide detail" : "Detail"}</button>
       ${acts.map(([status, label]) => `<button type="button" data-work-act="${status}" data-work-id="${esc(item.id)}">${label}</button>`).join("")}
@@ -548,7 +548,7 @@ document.getElementById("app").addEventListener("input", (event) => {
   if (!form || (form.id !== "filters" && form.id !== "work-filter")) return;
   if (form.id === "work-filter") {
     state.workFilter = String(new FormData(form).get("status") || "");
-    render();
+    refresh();
     return;
   }
   const data = new FormData(form);

@@ -192,7 +192,20 @@ export interface WorkListFilter {
   status?: WorkStatus;
   q?: string;
   includeArchived?: boolean;
+  /** When set, open items are kept ahead of completed and archived ones before the limit is applied. */
+  preferOpen?: boolean;
   limit?: number;
+}
+
+function isOpenStatus(status: WorkStatus): boolean {
+  return status === "active" || status === "paused" || status === "blocked";
+}
+
+function loadOpen(): WorkItem[] {
+  const rows = getDb()
+    .prepare("select * from work_items where status in ('active', 'paused', 'blocked') order by last_active_at desc, id")
+    .all() as unknown as WorkRow[];
+  return rows.map(parse);
 }
 
 export function listWork(filter: WorkListFilter = {}): WorkItem[] {
@@ -200,7 +213,7 @@ export function listWork(filter: WorkListFilter = {}): WorkItem[] {
   const project = filter.project?.trim().toLowerCase();
   const q = filter.q?.trim().toLowerCase();
   const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
-  return rows
+  const matched = rows
     .map(parse)
     .filter((item) => {
       if (filter.status && item.status !== filter.status) return false;
@@ -211,8 +224,16 @@ export function listWork(filter: WorkListFilter = {}): WorkItem[] {
         if (!hay.includes(q)) return false;
       }
       return true;
-    })
-    .slice(0, limit);
+    });
+  if (filter.preferOpen && !filter.status) {
+    matched.sort((a, b) => {
+      const ao = isOpenStatus(a.status) ? 0 : 1;
+      const bo = isOpenStatus(b.status) ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+      return b.last_active_at.localeCompare(a.last_active_at) || a.id.localeCompare(b.id);
+    });
+  }
+  return matched.slice(0, limit);
 }
 
 export interface StartWorkInput {
@@ -272,11 +293,8 @@ export function startWork(input: StartWorkInput): WorkWriteResult {
       }
     }
     if (!input.separate) {
-      const open = listWork({ includeArchived: false, limit: 200 }).find(
-        (item) =>
-          item.project.toLowerCase() === project.toLowerCase() &&
-          item.title.toLowerCase() === title.toLowerCase() &&
-          (item.status === "active" || item.status === "paused" || item.status === "blocked"),
+      const open = loadOpen().find(
+        (item) => item.project.toLowerCase() === project.toLowerCase() && item.title.toLowerCase() === title.toLowerCase(),
       );
       if (open) {
         if (eventId && !eventById(eventId)) {
@@ -514,13 +532,8 @@ export function completeWork(
   });
 }
 
-/** Most recently active open item, optionally inside one project. */
+/** Most recently active open item, optionally inside one project. Completed history is not a cap. */
 export function latestOpenWork(project?: string): WorkItem | undefined {
-  return listWork({
-    ...(project ? { project } : {}),
-    includeArchived: false,
-    limit: 200,
-  })
-    .filter((item) => item.status === "active" || item.status === "paused" || item.status === "blocked")
-    .sort((a, b) => b.last_active_at.localeCompare(a.last_active_at) || a.id.localeCompare(b.id))[0];
+  const projectKey = project?.trim().toLowerCase();
+  return loadOpen().find((item) => !projectKey || item.project.toLowerCase() === projectKey);
 }

@@ -125,7 +125,7 @@ export function registerWorkTools(server: McpServer, label: string): void {
     "list_work",
     {
       title: "List work",
-      description: "List work items by project, status, or a keyword in the title, goal, or progress. Archived items are omitted unless status is archived.",
+      description: "List work items by project, status, or a keyword in the title, goal, or progress. Without a status filter, open items are listed before completed ones so a long completed history does not hide the task in progress. Archived items are omitted unless status is archived.",
       inputSchema: {
         project: z.string().max(80).optional(),
         status: statusSchema.optional(),
@@ -141,6 +141,7 @@ export function registerWorkTools(server: McpServer, label: string): void {
           ...(status ? { status } : {}),
           ...(q ? { q } : {}),
           ...(limit ? { limit } : {}),
+          preferOpen: !status,
         });
         const text = items.length
           ? items.map((item) => `- [${item.id}] (${item.status}/${item.project}) ${item.title}`).join("\n")
