@@ -1,0 +1,16 @@
+services:
+  rolemem:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      NODE_ENV: production
+      ROLEMEM_ADMIN_TOKEN: ${ROLEMEM_ADMIN_TOKEN:?required}
+      ROLEMEM_PUBLIC_URL: ${ROLEMEM_PUBLIC_URL:-}
+      ROLEMEM_TRUST_PROXY: ${ROLEMEM_TRUST_PROXY:-1}
+    volumes:
+      - rolemem-data:/data
+    restart: unless-stopped
+
+volumes:
+  rolemem-data:

@@ -1,0 +1,5 @@
+# Replace the hostname, then: caddy run --config Caddyfile.example
+# Point this at the host port from docker compose. Caddy obtains the certificate.
+memory.example.com {
+	reverse_proxy 127.0.0.1:8787
+}

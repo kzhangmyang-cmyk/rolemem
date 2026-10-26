@@ -1,0 +1,8 @@
+---
+description: rolemem 项目说明
+alwaysApply: true
+---
+
+项目说明、架构、踩过的坑和开发约定都在仓库根目录的 AGENTS.md，动手前先读它：
+
+@AGENTS.md

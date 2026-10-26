@@ -1,0 +1,56 @@
+{
+  "memories": [
+    {
+      "content": "The user lives in Lisbon and commutes by tram.",
+      "type": "fact",
+      "space": "life",
+      "source_model": "eval"
+    },
+    {
+      "content": "Quotes should offer three tiers after the budget is confirmed.",
+      "type": "procedure",
+      "space": "work",
+      "source_model": "eval"
+    },
+    {
+      "content": "The user dislikes long email and prefers Wednesday afternoon calls.",
+      "type": "preference",
+      "space": "work",
+      "source_model": "eval"
+    },
+    {
+      "content": "张总偏好周三下午沟通，讨厌长邮件。",
+      "type": "preference",
+      "space": "work",
+      "source_model": "eval"
+    }
+  ],
+  "questions": [
+    {
+      "q": "Remind me about Lisbon and the tram.",
+      "anchors": ["Lisbon", "tram"],
+      "lexical": true
+    },
+    {
+      "q": "How many tiers should quotes offer after the budget is confirmed?",
+      "anchors": ["three tiers", "budget"],
+      "lexical": true
+    },
+    {
+      "q": "Wednesday afternoon calls and long email",
+      "anchors": ["Wednesday", "email"],
+      "lexical": true
+    },
+    {
+      "q": "张总什么时候沟通",
+      "anchors": ["周三"],
+      "lexical": true
+    },
+    {
+      "q": "What is their home city?",
+      "anchors": ["Lisbon"],
+      "lexical": false,
+      "note": "No shared tokens with the Lisbon fact. Lexical recall misses it. A model that was given the digest should still answer it."
+    }
+  ]
+}

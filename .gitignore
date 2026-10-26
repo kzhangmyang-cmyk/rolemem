@@ -1,0 +1,12 @@
+node_modules/
+data/
+.env
+*.db
+admin.token
+secret.key
+uploads/
+cursor-memory.md
+
+server.log
+*.zip
+.DS_Store

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "memories": [
+    {
+      "id": "10a507259d69aea6fa59f3a46312ff3d0e116ec3854823fe6672933e9c4c88b2",
+      "content": "Temporary project note about the booth.",
+      "type": "project",
+      "space": "work",
+      "source_model": null,
+      "updated_at": "2026-10-18T15:00:00.000Z",
+      "deleted": true
+    },
+    {
+      "id": "12cfc61005d9a89ce8e907ed10ab0051a330d75814f0a6cae990033e3f93bc43",
+      "content": "The user lives in Lisbon and commutes by tram.",
+      "type": "fact",
+      "space": "life",
+      "source_model": "claude",
+      "updated_at": "2026-10-26T12:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "4737b606644dc3a22e02f423ec005979c1cb0ab4d8f99f108cfe1b5f1643b36e",
+      "content": "Quotes should offer three tiers after the budget is confirmed.",
+      "type": "procedure",
+      "space": "work",
+      "source_model": "cursor",
+      "updated_at": "2026-10-20T09:30:00.000Z",
+      "deleted": false
+    }
+  ],
+  "sha256": "29608ff9f29f4337a91c270fbde8586caf994c564259eda2b5c38d3dd10aff67"
+}

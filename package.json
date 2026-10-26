@@ -1,0 +1,39 @@
+{
+  "name": "rolemem",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Single-user memory shared across AI models over MCP. 一份记忆，换模型也不丢。",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "node --no-warnings --env-file-if-exists=.env --watch src/server.ts",
+    "start": "node --no-warnings --env-file-if-exists=.env src/server.ts",
+    "service": "node --no-warnings --env-file-if-exists=.env scripts/service.ts",
+    "connect": "node --no-warnings --env-file-if-exists=.env scripts/connect.ts",
+    "demo": "node --no-warnings --env-file-if-exists=.env scripts/demo.ts",
+    "eval": "node --no-warnings --env-file-if-exists=.env scripts/eval.ts",
+    "test": "node --no-warnings --test --test-concurrency=1 test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  },
+  "keywords": [
+    "ai-memory",
+    "mcp",
+    "self-hosted",
+    "memory-portability",
+    "llm"
+  ]
+}
