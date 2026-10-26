@@ -20,6 +20,12 @@ export interface Memory {
   status: MemoryStatus;
   flags: string[];
   created_at: string;
+  /** 1–5 when the writer set one. Null uses type weight only. */
+  importance: number | null;
+  /** Free-text project label. Not part of the content hash. */
+  project: string | null;
+  /** Optional link to a work item. Not part of the content hash. */
+  work_id: string | null;
 }
 
 /** Collapse whitespace so the same fact written with different spacing is one memory. */
@@ -56,6 +62,29 @@ export function parseSourceModel(value: unknown): string | null {
   const text = String(value).trim();
   if (!text) return null;
   if (text.length > 64) throw new HttpError(400, "source_model is longer than 64 characters");
+  return text;
+}
+
+export function parseImportance(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 5) throw new HttpError(400, "importance must be an integer from 1 to 5");
+  return n;
+}
+
+export function parseProject(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim().replace(/\s+/g, " ");
+  if (!text) return null;
+  if (text.length > 80) throw new HttpError(400, "project is longer than 80 characters");
+  if (/[\u0000-\u001f]/.test(text)) throw new HttpError(400, "project contains control characters");
+  return text;
+}
+
+export function parseWorkId(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const text = String(value).trim();
+  if (!/^wrk_[a-f0-9]{24}$/.test(text)) throw new HttpError(400, "work_id must look like wrk_ followed by 24 hex characters");
   return text;
 }
 

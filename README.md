@@ -11,6 +11,7 @@ This is a single-user server. There is no sign-up. One admin token opens the arc
   Claude Code ─┼── MCP /mcp ── rolemem (SQLite)
   Codex ───────┘                 │
                                  ├── remember / recall / update / list / forget
+                                 ├── start_work / update_work / resume_work / complete_work
                                  ├── session digest (prompt + resource + instructions)
                                  └── JSON export, including deleted markers
 ```
@@ -100,6 +101,16 @@ Under a few hundred memories the digest is the full archive. Past the count or c
 
 Tools: `remember`, `recall`, `update`, `list_memories`, `forget`.
 
+### Work continuity
+
+Long-term memory and the task in progress are different. Memory is a preference, fact, project, or procedure. Work is the goal, the status, what is done, what failed, what is only a hypothesis, and what to do next.
+
+`resume_work` returns that handoff in one call. If nothing is open it returns related memories and recent titles. It does not invent a task. Hypotheses are labeled unverified and are not mixed into facts.
+
+Connecting MCP does **not** capture chat messages, terminal output, or secrets. A client has to call the tools. See [docs/clients.md](docs/clients.md) for Codex, Claude Code, and Cursor, including what was not verified against a live client.
+
+The admin page has a Work tab. Copying the SQLite file (`ROLEMEM_DB`, or the Docker volume `/data`) moves both memories and work items. The JSON export stays version 1 and memories-only, so an older file still imports.
+
 ## Portable export
 
 `examples/sample-export.json` is a complete file. `id` is the SHA-256 of the normalized content (trimmed, internal whitespace collapsed), so importing the same text twice does not create a second row.
@@ -173,19 +184,27 @@ Use a named tunnel and a hostname for anything you keep. The quick command above
 | `POST /api/import` | `{ document }` or `{ source, text, space, type }` |
 | `POST /api/connections` | `{ label }` returns the key once, plus client snippets |
 | `GET /api/connections` · `DELETE /api/connections/:id` | List and revoke |
+| `GET /api/work` | Work items. `project`, `status`, `q`, `include_archived=1` |
+| `POST /api/work` | `{ project, title, goal }` |
+| `GET /api/work/resume` | Same handoff as `resume_work` |
+| `GET /api/work/:id` · `PATCH /api/work/:id` | Read and update one item |
+| `POST /api/work/:id/complete` | `{ archive?: true }` |
+| `GET /api/audit` · `GET /api/conflicts` | Recent actions, and text that a newer write replaced |
 
 Basic rate limits apply (240 HTTP requests and 120 MCP requests per minute in one process). They reset on restart and are not shared across replicas. Behind a proxy, set `ROLEMEM_TRUST_PROXY=1` or every client shares one bucket.
 
 ## Recall quality
 
-`npm test` covers lossless round-trip, duplicate import, deletes that do not come back, and an MCP smoke test. `npm run eval` teaches `eval/fixtures.json`, checks that the digest contains every fact, and checks that lexical recall hits questions which share words with the fact.
+`npm test` covers lossless round-trip, duplicate import, deletes that do not come back, MCP tools including a two-client work handoff, migrations, and credential refusal. `npm run eval` teaches `eval/fixtures.json` and checks lexical questions. `npm run eval:recall` compares the 0.3 overlap ranker with the current ranker on `eval/recall-bench.json`.
+
+On the bench shipped with 0.4.0, one run on this tree reported Recall@5 0.700 → 1.000 and MRR 0.650 → 1.000 across 10 scored questions, with FTS5 on, and 0 regressions. Three of the new hits are an exact memory id, a project label, and a work id, which the old ranker cannot see. A paraphrase with no shared words (“What is their home city?”) is still a miss for both and is not counted as a win. Re-run the script before repeating those numbers.
 
 That is not the bar this project is aiming at, which is near-perfect recall of taught facts across models. The gaps are listed at the end of `npm run eval`:
 
-- Overlap ranking misses paraphrases with no shared words (“What is their home city?” does not retrieve Lisbon). The digest still contains the fact, which is why session injection exists.
+- Overlap and FTS5 both miss paraphrases with no shared words (“What is their home city?” does not retrieve Lisbon). The digest still contains the fact, which is why session injection exists.
 - Nothing here drives Claude, Cursor, and ChatGPT through MCP and scores their answers against one fixture.
-- Above the digest cap, selection is importance and recency, or relevance when a question was passed. It is not a learned ranker. FTS5 is the next step if a real log shows the paraphrase misses matter.
-- Set `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` to have `npm run eval` ask one model those questions with the digest as the system prompt. One judge is not a cross-model harness.
+- Above the digest cap, selection is importance and recency, or relevance when a question was passed. It is not a learned ranker.
+- Set `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` to have `npm run eval` ask one model those questions with the digest as the system prompt. One judge is not a cross-model harness. The server does not call that model for work summaries.
 
 ## Where 0.2 went
 
@@ -207,4 +226,6 @@ npm run check          # typecheck and test
 npm run dev            # reload on change
 ```
 
-See [SECURITY.md](SECURITY.md) and [AGENTS.md](AGENTS.md). MIT licensed.
+See [SECURITY.md](SECURITY.md), [docs/clients.md](docs/clients.md), and [AGENTS.md](AGENTS.md). MIT licensed.
+
+`package.json` stays `private`. This tree is not published to npm. Version 0.4.0 is an additive server change: old MCP tools and export version 1 still work. It is not an npm release.

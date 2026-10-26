@@ -9,9 +9,10 @@ The 0.2 multi-user product (roles, transfer, UMP signatures) is the `legacy-full
 - `src/memory/store.ts` is the archive. Identity is `sha256(normalized content)`. Status is `active`, `quarantined`, or `deleted`.
 - `src/archive/format.ts` is the portable JSON file (`version`, `memories`, `sha256`). Merge: newer `updated_at` wins; equal timestamps let a delete win. Native import is not injection-screened, or round-trip stops being lossless.
 - `src/mcp/norms.ts` is the session text: write rules plus the digest. It is sent as MCP instructions, the `memory` prompt, and the `rolemem://digest` resource.
-- `src/mcp/server.ts` tools: `remember`, `recall`, `update`, `list_memories`, `forget`. MCP writes are screened.
-- `web/index.html` is view, edit, import, export, and connection keys. No chat.
-- `eval/fixtures.json` and `scripts/eval.ts` are the recall eval. Lexical overlap is a stand-in. Do not describe it as the cross-model acceptance bar.
+- `src/mcp/server.ts` tools: `remember`, `recall`, `update`, `list_memories`, `forget`, plus `start_work`, `update_work`, `get_work`, `list_work`, `resume_work`, `complete_work`. MCP writes are screened. Credentials are refused on remember and redacted on work notes.
+- `src/work/` is continuity: its own tables, separate from memories. `resume_work` returns recorded facts, done, failed, unverified hypotheses, blockers, and next actions.
+- `web/index.html` is view, edit, import, export, connection keys, and work items. No chat.
+- `eval/fixtures.json` and `scripts/eval.ts` are the recall eval. `eval/recall-bench.json` and `scripts/eval-recall.ts` compare the 0.3 lexical ranker with the current one. Do not describe either as the cross-model acceptance bar.
 
 ## Commands
 
@@ -19,4 +20,4 @@ The 0.2 multi-user product (roles, transfer, UMP signatures) is the `legacy-full
 
 ## Digest
 
-Full inject while the active set is within `ROLEMEM_DIGEST_MAX` (300) and `ROLEMEM_DIGEST_CHAR_CAP` (48000). Otherwise importance (preference, procedure, project, fact) then recency, unless the caller passed a query, in which case lexical relevance wins. FTS5 is not implemented.
+Full inject while the active set is within `ROLEMEM_DIGEST_MAX` (300) and `ROLEMEM_DIGEST_CHAR_CAP` (48000). Otherwise importance (preference, procedure, project, fact) then recency, unless the caller passed a query, in which case lexical relevance wins. Recall uses FTS5 when this Node build has it, and falls back to lexical overlap. Recency does not outrank a better-typed match. Copying the SQLite file moves memories and work items. JSON export version 1 is still memories only.

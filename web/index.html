@@ -59,7 +59,8 @@
   .row button { flex: 0 0 auto; }
   .memory { border-top: 1px solid var(--line); padding: 12px 0; }
   .memory:first-of-type { border-top: 0; }
-  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; }
+  .stack { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
   .pill { border: 1px solid var(--line); padding: 0 6px; font-size: 11px; letter-spacing: 0.02em; }
   .pill.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
   .content { margin: 6px 0; white-space: pre-wrap; }
@@ -82,7 +83,7 @@
     <i>rm</i>
     <div>
       <h1>rolemem</h1>
-      <div class="sub">One memory store for every model you use.</div>
+      <div class="sub">Long-term memory and shared work continuity.</div>
     </div>
   </div>
   <button id="lock" class="quiet" hidden>Lock</button>
@@ -106,6 +107,11 @@ const state = {
   minted: null,
   filter: { space: "", type: "", q: "" },
   editing: null,
+  work: [],
+  workFilter: "",
+  workId: "",
+  conflicts: [],
+  audit: [],
 };
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -156,15 +162,21 @@ async function refresh(opts = {}) {
     if (state.filter.type) q.set("type", state.filter.type);
     if (state.filter.q) q.set("q", state.filter.q);
     const suffix = q.toString() ? `?${q}` : "";
-    const [listed, connections, snapshot] = await Promise.all([
+    const [listed, connections, snapshot, work, conflicts, audit] = await Promise.all([
       api("GET", `/api/memories${suffix}`),
       api("GET", "/api/connections"),
       api("GET", "/api/digest"),
+      api("GET", state.workFilter ? `/api/work?status=${encodeURIComponent(state.workFilter)}` : "/api/work"),
+      api("GET", "/api/conflicts"),
+      api("GET", "/api/audit?limit=20"),
     ]);
     state.memories = listed.memories;
     state.deletedCount = listed.deleted;
     state.connections = connections.connections;
     state.digest = snapshot;
+    state.work = work.work;
+    state.conflicts = conflicts.conflicts;
+    state.audit = audit.audit;
     if (state.showDeleted) state.deleted = (await api("GET", `/api/memories?status=deleted${suffix ? `&${q}` : ""}`)).memories;
   } catch (err) {
     state.error = err.message;
@@ -214,6 +226,40 @@ function memoryCard(memory, deleted) {
   </article>`;
 }
 
+function workLines(title, notes) {
+  if (!notes?.length) return "";
+  return `<p class="meta">${esc(title)}</p><ul>${notes.map((note) => `<li>${esc(note.text)}</li>`).join("")}</ul>`;
+}
+
+function workCard(item) {
+  const open = state.workId === item.id;
+  const acts = {
+    active: [["paused", "Pause"], ["blocked", "Block"], ["completed", "Complete"], ["archived", "Archive"]],
+    paused: [["active", "Resume"], ["completed", "Complete"], ["archived", "Archive"]],
+    blocked: [["active", "Resume"], ["completed", "Complete"], ["archived", "Archive"]],
+    completed: [["archived", "Archive"], ["active", "Reopen"]],
+    archived: [["active", "Reopen"]],
+  }[item.status] || [];
+  return `<article class="memory">
+    <div class="meta">
+      <span class="pill">${esc(item.status)}</span>
+      <span class="pill">${esc(item.project)}</span>
+      <span>${esc(when(item.updated_at))}</span>
+      ${item.client_id ? `<span>${esc(item.client_id)}</span>` : ""}
+    </div>
+    <p class="content"><strong>${esc(item.title)}</strong></p>
+    <p class="content">${esc(item.goal)}</p>
+    ${item.progress_summary ? `<p class="content">${esc(item.progress_summary)}</p>` : ""}
+    ${item.current_step ? `<p class="meta">Current step: ${esc(item.current_step)}</p>` : ""}
+    ${item.next_actions?.length ? `<p class="meta">Next: ${esc(item.next_actions[item.next_actions.length - 1].text)}</p>` : `<p class="meta">Next: none recorded</p>`}
+    <div class="row">
+      <button type="button" data-work-open="${esc(item.id)}">${open ? "Hide detail" : "Detail"}</button>
+      ${acts.map(([status, label]) => `<button type="button" data-work-act="${status}" data-work-id="${esc(item.id)}">${label}</button>`).join("")}
+    </div>
+    ${open ? `${workLines("Done", item.completed_steps)}${workLines("Failed", item.failed_attempts)}${workLines("Hypotheses (not facts)", item.hypotheses)}${workLines("Blockers", item.blockers)}${workLines("Open issues", item.open_issues)}${workLines("Next", item.next_actions)}${workLines("Decisions", item.key_decisions)}${item.related_memory_ids?.length ? `<p class="meta">Related memories: ${item.related_memory_ids.map((id) => esc(id.slice(0, 8))).join(", ")}</p>` : ""}${item.flags?.length ? `<p class="meta"><span class="pill warn">${esc(item.flags.join(", "))}</span></p>` : ""}` : ""}
+  </article>`;
+}
+
 function render() {
   document.getElementById("lock").hidden = !state.token;
   const app = document.getElementById("app");
@@ -243,7 +289,7 @@ function render() {
   const spaces = [...new Set(state.memories.map((memory) => memory.space).concat(["work", "life"]))].sort();
   app.innerHTML = `
     <nav class="tabs">
-      ${["memories", "transfer", "connections"].map((tab) => `<button type="button" data-tab="${tab}" aria-selected="${state.tab === tab}">${tab === "transfer" ? "Import / export" : tab[0].toUpperCase() + tab.slice(1)}</button>`).join("")}
+      ${[["memories", "Memories"], ["work", "Work"], ["transfer", "Import / export"], ["connections", "Connections"]].map(([tab, label]) => `<button type="button" data-tab="${tab}" aria-selected="${state.tab === tab}">${label}</button>`).join("")}
     </nav>
     ${state.error ? `<div class="error">${esc(state.error)}</div>` : ""}
     ${state.loading && !state.ready ? `<p class="empty">Loading the archive…</p>` : ""}
@@ -266,6 +312,7 @@ function render() {
             ${field("Search", `<input name="q" value="${esc(state.filter.q)}" placeholder="Find a phrase" />`)}
           </form>
           ${quarantined.length ? `<div class="card" style="margin-top:12px;background:var(--warn-bg)"><h2>Quarantine · ${quarantined.length}</h2><p class="empty">These came from a model or a paste and look like instructions. They are not in the digest.</p>${quarantined.map((memory) => memoryCard(memory)).join("")}<div class="row"><button data-bulk="approve">Approve all</button><button class="danger" data-bulk="delete">Delete all</button></div></div>` : ""}
+          ${state.conflicts.length ? `<div class="card" style="margin-top:12px"><h2>Content replacements · ${state.conflicts.length}</h2><p class="empty">A newer edit or import replaced the text. The previous wording is kept here. The active row is the newer one.</p>${state.conflicts.slice(0, 5).map((row) => `<article class="memory"><p class="meta">${esc(row.resolution)} · ${esc(when(row.created_at))}</p><p class="content">${esc(row.old_content)}</p><p class="meta">newer</p><p class="content">${esc(row.new_content)}</p></article>`).join("")}</div>` : ""}
           <div style="margin-top:8px">
             ${active.length ? active.map((memory) => memoryCard(memory)).join("") : state.loading ? "" : `<p class="empty">Nothing stored${state.filter.q || state.filter.space || state.filter.type ? " for this filter" : ""}. Teach a fact above, or import a JSON export.</p>`}
           </div>
@@ -278,6 +325,28 @@ function render() {
           <pre>${esc(state.digest?.text || "")}</pre>
         </aside>
       </div>
+    </section>
+    <section class="card" data-panel="work" ${state.tab === "work" ? "" : "hidden"}>
+      <h2>Work continuity</h2>
+      <p>This is the shared task, not the long-term memory and not a chat transcript. Connecting a client does not capture messages. Hypotheses stay separate from recorded facts.</p>
+      <form id="work-add">
+        <div class="row">
+          ${field("Project", `<input name="project" required placeholder="rolemem" />`)}
+          ${field("Title", `<input name="title" required placeholder="What is in progress" />`)}
+        </div>
+        ${field("Goal", `<textarea name="goal" required placeholder="One goal another client can continue."></textarea>`)}
+        <div class="row" style="margin-top:8px"><button class="primary" type="submit">Start work</button></div>
+      </form>
+      <form id="work-filter" class="row" style="margin-top:16px">
+        ${field("Status", `<select name="status"><option value="" ${state.workFilter === "" ? "selected" : ""}>Open and completed</option>${["active", "paused", "blocked", "completed", "archived"].map((status) => `<option value="${status}" ${state.workFilter === status ? "selected" : ""}>${status}</option>`).join("")}</select>`)}
+      </form>
+      ${(() => {
+        const shown = state.work.filter((item) => state.workFilter ? item.status === state.workFilter : item.status !== "archived");
+        if (!shown.length) return `<p class="empty">${state.loading ? "" : "No work items for this filter. Start one above, or from start_work in a client."}</p>`;
+        return shown.map(workCard).join("");
+      })()}
+      <h2 style="margin-top:18px">Recent audit</h2>
+      ${state.audit.length ? state.audit.map((row) => `<p class="stack">${esc(when(row.at))} · ${esc(row.action)} · ${esc(row.target || "")} · ${esc(row.detail || "")}</p>`).join("") : `<p class="empty">No audit rows yet.</p>`}
     </section>
     <section class="card" data-panel="transfer" ${state.tab === "transfer" ? "" : "hidden"}>
       <h2>Move the archive</h2>
@@ -393,6 +462,18 @@ document.getElementById("app").addEventListener("submit", async (event) => {
       await refresh();
       return;
     }
+    if (form.id === "work-add") {
+      await api("POST", "/api/work", {
+        project: data.get("project"),
+        title: data.get("title"),
+        goal: data.get("goal"),
+        client_id: "admin",
+      });
+      toast("Work started");
+      state.tab = "work";
+      await refresh();
+      return;
+    }
     if (form.id === "mint") {
       state.minted = await api("POST", "/api/connections", { label: data.get("label") });
       toast("Key minted. It will not be shown again.");
@@ -432,6 +513,18 @@ document.getElementById("app").addEventListener("click", async (event) => {
       await api("DELETE", `/api/connections/${button.dataset.revoke}`);
       toast("Revoked");
       await refresh();
+    } else if (button.dataset.workOpen) {
+      state.workId = state.workId === button.dataset.workOpen ? "" : button.dataset.workOpen;
+      render();
+      return;
+    } else if (button.dataset.workAct) {
+      const act = button.dataset.workAct;
+      if ((act === "completed" || act === "archived") && !confirm(act === "archived" ? "Archive this work item?" : "Mark this work item completed?")) return;
+      if (act === "completed") await api("POST", `/api/work/${button.dataset.workId}/complete`, {});
+      else if (act === "archived") await api("POST", `/api/work/${button.dataset.workId}/complete`, { archive: true });
+      else await api("PATCH", `/api/work/${button.dataset.workId}`, { status: act });
+      toast("Work updated");
+      await refresh();
     } else if (button.id === "toggle-deleted") {
       state.showDeleted = !state.showDeleted;
       await refresh();
@@ -452,7 +545,12 @@ document.getElementById("app").addEventListener("click", async (event) => {
 
 document.getElementById("app").addEventListener("input", (event) => {
   const form = event.target.form;
-  if (!form || form.id !== "filters") return;
+  if (!form || (form.id !== "filters" && form.id !== "work-filter")) return;
+  if (form.id === "work-filter") {
+    state.workFilter = String(new FormData(form).get("status") || "");
+    refresh();
+    return;
+  }
   const data = new FormData(form);
   state.filter = { space: String(data.get("space") || ""), type: String(data.get("type") || ""), q: String(data.get("q") || "") };
   clearTimeout(render.filterTimer);

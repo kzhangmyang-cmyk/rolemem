@@ -1,0 +1,144 @@
+{
+  "memories": [
+    {
+      "key": "sqlite-pref",
+      "content": "The billing service must stay on SQLite.",
+      "type": "preference",
+      "space": "work",
+      "project": "billing",
+      "updated_at": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "key": "sqlite-new",
+      "content": "Checked SQLite file size today.",
+      "type": "fact",
+      "space": "work",
+      "project": "billing",
+      "updated_at": "2026-10-26T00:00:00.000Z"
+    },
+    {
+      "key": "additive",
+      "content": "Keep schema changes additive and reversible.",
+      "type": "project",
+      "space": "work",
+      "project": "rolemem",
+      "work_id": "wrk_0123456789abcdef01234567",
+      "updated_at": "2025-06-01T00:00:00.000Z"
+    },
+    {
+      "key": "lisbon",
+      "content": "The user lives in Lisbon and commutes by tram.",
+      "type": "fact",
+      "space": "life",
+      "updated_at": "2023-05-01T00:00:00.000Z"
+    },
+    {
+      "key": "lisbon-zh",
+      "content": "用户住在 Lisbon，通勤靠电车。",
+      "type": "fact",
+      "space": "life",
+      "updated_at": "2023-05-02T00:00:00.000Z"
+    },
+    {
+      "key": "tiers",
+      "content": "报价单确认预算后提供三档方案。",
+      "type": "procedure",
+      "space": "work",
+      "project": "quotes",
+      "updated_at": "2024-04-01T00:00:00.000Z"
+    },
+    {
+      "key": "red-header",
+      "content": "报价单使用红色表头。",
+      "type": "preference",
+      "space": "work",
+      "project": "quotes",
+      "updated_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "key": "gateway",
+      "content": "The gateway must stay on Hono and SQLite.",
+      "type": "project",
+      "space": "work",
+      "project": "gateway",
+      "updated_at": "2022-01-01T00:00:00.000Z"
+    },
+    {
+      "key": "gateway-restart",
+      "content": "Restarted the gateway process this morning.",
+      "type": "fact",
+      "space": "work",
+      "project": "gateway",
+      "updated_at": "2026-10-25T00:00:00.000Z"
+    }
+  ],
+  "questions": [
+    {
+      "name": "recency does not outrank a preference",
+      "q": "SQLite",
+      "expect": ["sqlite-pref"],
+      "kind": "recency"
+    },
+    {
+      "name": "exact memory id",
+      "q": "$id:additive",
+      "expect": ["additive"],
+      "kind": "id"
+    },
+    {
+      "name": "project label",
+      "q": "rolemem",
+      "expect": ["additive"],
+      "kind": "project"
+    },
+    {
+      "name": "work id",
+      "q": "wrk_0123456789abcdef01234567",
+      "expect": ["additive"],
+      "kind": "work-id"
+    },
+    {
+      "name": "chinese procedure",
+      "q": "三档方案",
+      "expect": ["tiers"],
+      "kind": "zh"
+    },
+    {
+      "name": "similar chinese memories",
+      "q": "红色表头",
+      "expect": ["red-header"],
+      "kind": "zh-similar"
+    },
+    {
+      "name": "mixed chinese and english",
+      "q": "Lisbon 电车",
+      "expect": ["lisbon-zh"],
+      "kind": "mixed"
+    },
+    {
+      "name": "english lexical",
+      "q": "Lisbon tram",
+      "expect": ["lisbon"],
+      "kind": "en"
+    },
+    {
+      "name": "older decision beats a newer status note",
+      "q": "gateway must stay on Hono",
+      "expect": ["gateway"],
+      "kind": "conflict-history"
+    },
+    {
+      "name": "no match",
+      "q": "quantum banana smoothie",
+      "expect": [],
+      "kind": "none"
+    },
+    {
+      "name": "paraphrase with no shared words",
+      "q": "What is their home city?",
+      "expect": [],
+      "kind": "gap",
+      "gap": true
+    }
+  ]
+}
