@@ -81,7 +81,11 @@ macOS 上 `npm run service -- install` 会在登录时拉起源码进程。Linux
 
 记忆不多（大约几百条以内，并且不超过字符上限）时，摘要就是全部。超过上限时保留更重要、更新的条目（偏好和做法优先）。prompt 里如果带了问题，则按字面重合度挑选。摘要里写明被省略的部分，再用 `recall` 查。
 
-工具：`remember`、`recall`、`update`、`list_memories`、`forget`。
+工具：`remember`、`recall`、`update`、`list_memories`、`forget`，以及工作连续性的 `start_work`、`update_work`、`get_work`、`list_work`、`resume_work`、`complete_work`。
+
+长期记忆和工作连续性是两套数据。记忆是偏好、事实、项目或做法。工作项是当前目标、状态、已完成、失败尝试、未验证假设和下一步。`resume_work` 一次拿回这些内容；没有进行中的任务时返回相关记忆和最近标题，不编造任务。假设不会被写成事实。
+
+接上 MCP **不会**自动记下每一条聊天、终端输出或密钥。客户端必须自己调用工具。Codex、Claude Code、Cursor 的配置和未实测项见 [docs/clients.md](docs/clients.md)。管理页有 Work 标签。拷贝 SQLite 文件会同时带走记忆和工作项。JSON 导出仍是 version 1，只含记忆，旧文件可以继续导入。
 
 ## 可携带的导出
 
@@ -145,7 +149,9 @@ cloudflared tunnel --url http://127.0.0.1:8787
 
 `npm test` 覆盖无损往返、重复导入不产生副本、删除不会被旧导出复活，以及 MCP 冒烟。`npm run eval` 用 `eval/fixtures.json` 教一批事实，检查摘要里都有，并检查字面重合的问题能否被 `recall` 命中。
 
-这还不是「换任何模型都能几乎全部答对」的验收线。`npm run eval` 结尾写了差距：没有共同词的改写问法会漏（「家在哪个城市」召不回 Lisbon）；还没有让 Claude、Cursor、ChatGPT 同时走 MCP 再打分的测试；超过摘要上限时的挑选是重要程度和最近更新，或者有问题时的字面相关度，不是学习出来的排序。字面漏召回如果在真实使用里常见，再加 FTS5。配置 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL` 后，eval 会把摘要放进系统提示词去问一个模型。一个评判模型不等于跨模型测试。
+`npm run eval:recall` 用固定的 `eval/recall-bench.json` 比较 0.3 的字面排序和现在的排序。本仓库这一版在 FTS5 可用时跑出 Recall@5 从 0.700 到 1.000、MRR 从 0.650 到 1.000（10 道计分题，0 次退步）。新增命中里有精确记忆 id、项目名和工作项 id，旧排序看不到这些字段。没有共同词的改写（「家在哪个城市」）两边都漏，不算提升。换机器后以脚本输出为准。
+
+这还不是「换任何模型都能几乎全部答对」的验收线。没有共同词的改写问法会漏；还没有让 Claude、Cursor、ChatGPT 同时走 MCP 再打分的测试。FTS5 只在当前 Node 的 SQLite 带这个模块时启用，没有就退回字面重合。服务器不会为了工作摘要去调用模型。
 
 ## 0.2 在哪里
 

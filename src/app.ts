@@ -7,10 +7,14 @@ import { claudeCodeCommand, codexSnippet, cursorSnippet } from "./cli/clients.ts
 import { connectionByLabel, createConnection, listConnections, revokeConnection } from "./connections.ts";
 import { handleMcp } from "./mcp/server.ts";
 import { exportMarkdown, exportPortable, importMarkdown, importPaste, importPortable } from "./archive/exchange.ts";
-import { approveMemory, createMemory, decideQuarantine, digest, forgetMemory, listMemories, updateMemory } from "./memory/store.ts";
+import { listAudit } from "./audit.ts";
+import { approveMemory, createMemory, decideQuarantine, digest, forgetMemory, listConflicts, listMemories, updateMemory } from "./memory/store.ts";
 import { isStatus, isType, parseSpace, type MemoryStatus, type MemoryType } from "./memory/types.ts";
-
-const VERSION = "0.3.0";
+import { isWorkStatus } from "./work/machine.ts";
+import { resumeWork } from "./work/resume.ts";
+import { completeWork, getWork, listWork, listWorkEvents, startWork, updateWork } from "./work/store.ts";
+import { workSummary } from "./work/summary.ts";
+import { VERSION } from "./version.ts";
 
 export const app = new Hono();
 
@@ -177,6 +181,75 @@ app.post("/api/import", async (c) => {
   const text = payload.text ?? "";
   if (payload.source === "markdown" || text.startsWith("# rolemem memories")) return c.json(importMarkdown(text, { screen: payload.screen === true }));
   return c.json(importPaste(text, { source: payload.source ?? "other", space: payload.space, type: payload.type, source_model: payload.source_model }));
+});
+
+app.get("/api/work", (c) => {
+  guard(c);
+  const project = c.req.query("project");
+  const status = c.req.query("status");
+  const q = c.req.query("q");
+  const includeArchived = c.req.query("include_archived") === "1";
+  if (status && !isWorkStatus(status)) throw new HttpError(400, "status must be active, paused, blocked, completed, or archived");
+  const workStatus = status && isWorkStatus(status) ? status : undefined;
+  return c.json({
+    work: listWork({
+      ...(project ? { project } : {}),
+      ...(workStatus ? { status: workStatus } : {}),
+      ...(q ? { q } : {}),
+      includeArchived,
+    }),
+  });
+});
+
+app.post("/api/work", async (c) => {
+  guard(c);
+  const input = await body<{ project: string; title: string; goal: string; event_id?: string; client_id?: string; session_id?: string; separate?: boolean }>(c);
+  const saved = startWork({ ...input, source_client: "admin" });
+  return c.json(saved, saved.action === "created" ? 201 : 200);
+});
+
+app.get("/api/work/resume", (c) => {
+  guard(c);
+  const limit = c.req.query("limit_chars");
+  return c.json(
+    resumeWork({
+      ...(c.req.query("work_id") ? { work_id: c.req.query("work_id") } : {}),
+      ...(c.req.query("project") ? { project: c.req.query("project") } : {}),
+      ...(c.req.query("q") ? { query: c.req.query("q") } : {}),
+      ...(limit ? { limit_chars: Number(limit) } : {}),
+    }),
+  );
+});
+
+app.get("/api/work/:id", (c) => {
+  guard(c);
+  const item = getWork(c.req.param("id"));
+  if (!item) throw new HttpError(404, "Work item not found");
+  return c.json({ work: item, events: listWorkEvents(item.id, 50), summary: workSummary(item) });
+});
+
+app.patch("/api/work/:id", async (c) => {
+  guard(c);
+  const patch = await body<Record<string, unknown>>(c);
+  return c.json(updateWork(c.req.param("id"), { ...patch, actor: "admin" }));
+});
+
+app.post("/api/work/:id/complete", async (c) => {
+  guard(c);
+  const input = await body<{ event_id?: string; progress_summary?: string; archive?: boolean; client_id?: string }>(c);
+  const saved = completeWork(c.req.param("id"), { ...input, actor: "admin" });
+  return c.json({ ...saved, summary: workSummary(saved.item) });
+});
+
+app.get("/api/audit", (c) => {
+  guard(c);
+  const limit = Number(c.req.query("limit") ?? 50);
+  return c.json({ audit: listAudit(Number.isFinite(limit) ? limit : 50) });
+});
+
+app.get("/api/conflicts", (c) => {
+  guard(c);
+  return c.json({ conflicts: listConflicts(50) });
 });
 
 app.get("/api/connections", (c) => {

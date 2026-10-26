@@ -55,7 +55,7 @@ export function importPaste(
   if (!isPasteSource(opts.source)) throw new HttpError(400, "source must be chatgpt, claude, gemini, or other");
   const source = opts.source as PasteSource;
   const items = requirePasteItems(text);
-  const stats: MergeStats = { added: 0, updated: 0, deleted: 0, skipped: 0, quarantined: 0 };
+  const stats: MergeStats = { added: 0, updated: 0, deleted: 0, skipped: 0, quarantined: 0, conflicts: 0 };
   withTx(() => {
     for (const item of items) {
       const result = createMemory({

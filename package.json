@@ -1,6 +1,6 @@
 {
   "name": "rolemem",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Single-user memory shared across AI models over MCP. 一份记忆，换模型也不丢。",
   "license": "MIT",
@@ -15,6 +15,7 @@
     "connect": "node --no-warnings --env-file-if-exists=.env scripts/connect.ts",
     "demo": "node --no-warnings --env-file-if-exists=.env scripts/demo.ts",
     "eval": "node --no-warnings --env-file-if-exists=.env scripts/eval.ts",
+    "eval:recall": "node --no-warnings --env-file-if-exists=.env scripts/eval-recall.ts",
     "test": "node --no-warnings --test --test-concurrency=1 test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test"

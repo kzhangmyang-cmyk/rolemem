@@ -72,10 +72,10 @@ if (!llmConfigured()) {
 
 console.log(`
 Gaps before the acceptance bar (almost all taught facts recalled correctly, across models):
-- The ranker is character overlap, not meaning. “What is their home city?” does not retrieve Lisbon.
+- The ranker still misses paraphrases with no shared words. “What is their home city?” does not retrieve Lisbon. FTS5 does not close that gap.
+- npm run eval:recall compares the 0.3 lexical ranker with the current one on eval/recall-bench.json. Quote that script's output. Do not treat it as a semantic-recall claim.
 - There is no harness that drives Claude, Cursor, and ChatGPT through MCP and scores them against one fixture.
-- Full inject covers a few hundred memories. Above the cap, selection is importance then recency, or relevance when a question is present. It is not a learned ranker.
-- FTS5 is not built. Add it only if paraphrase misses show up in a real log.
+- Full inject covers a few hundred memories. Above the cap, selection is importance then recency, or relevance when a question is present.
 - Quarantine is a regex list. Rephrased injections pass.
 - npm run eval with a model scores one judge looking at the digest. That is necessary and not sufficient.
 `);

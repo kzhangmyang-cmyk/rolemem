@@ -1,3 +1,4 @@
+import { fts5Enabled, ftsHits, type FtsHit } from "./fts.ts";
 import type { Memory, MemoryType } from "./types.ts";
 
 const TYPE_WEIGHT: Record<MemoryType, number> = {
@@ -120,11 +121,105 @@ function pick(memory: Memory): DigestMemory {
   };
 }
 
-export function rankForRecall(memories: Memory[], query: string, limit: number): (Memory & { score: number })[] {
+/** The 0.3 lexical ranker, kept so eval can compare it with the current one. */
+export function rankLexical(memories: Memory[], query: string, limit: number): (Memory & { score: number })[] {
   const q = terms(query);
   return memories
     .map((memory) => ({ ...memory, score: overlap(q, memory.content) }))
     .filter((memory) => memory.score > 0)
     .sort((a, b) => b.score - a.score || b.updated_at.localeCompare(a.updated_at) || a.id.localeCompare(b.id))
     .slice(0, limit);
+}
+
+export interface RankDiagnostics {
+  lexical: number;
+  precision: number;
+  fts: number;
+  importance: number;
+  project: number;
+  id_match: number;
+  reasons: string[];
+}
+
+export interface RankedMemory extends Memory {
+  score: number;
+  diagnostics: RankDiagnostics;
+}
+
+function ftsWeight(rank: number | undefined): number {
+  if (!rank) return 0;
+  if (rank === 1) return 1;
+  if (rank === 2) return 0.66;
+  if (rank === 3) return 0.33;
+  return 0.15;
+}
+
+function matchExpression(query: string): string {
+  return [...terms(query)]
+    .slice(0, 16)
+    .map((term) => `"${term.replaceAll('"', '""')}"`)
+    .join(" OR ");
+}
+
+/**
+ * Lexical overlap stays the main signal. FTS5, project/work id, and an exact
+ * memory id add recall paths the 0.3 ranker did not have. Recency is only a
+ * final tie-break, after type and explicit importance.
+ */
+export function rankMemories(memories: Memory[], query: string, limit: number, fts: FtsHit[] = []): RankedMemory[] {
+  const q = terms(query);
+  const trimmed = query.trim();
+  const ftsById = new Map(fts.map((hit) => [hit.id, hit.rank]));
+  const ranked: RankedMemory[] = [];
+  for (const memory of memories) {
+    const lexical = overlap(q, memory.content);
+    const memoryTerms = terms(memory.content);
+    let matched = 0;
+    for (const term of memoryTerms) if (q.has(term)) matched++;
+    const precision = memoryTerms.size ? matched / memoryTerms.size : 0;
+    const ftsScore = ftsWeight(ftsById.get(memory.id));
+    const projectText = memory.project?.toLowerCase() ?? "";
+    const queryLower = trimmed.toLowerCase();
+    const project =
+      projectText && projectText.length >= 2 && (queryLower.includes(projectText) || projectText === queryLower) ? 1 : 0;
+    const workLink = memory.work_id && queryLower.includes(memory.work_id) ? 1 : 0;
+    const idMatch = trimmed === memory.id || (trimmed.length >= 12 && memory.id.startsWith(trimmed)) ? 1 : 0;
+    const importance = TYPE_WEIGHT[memory.type] / 4 + (memory.importance ?? 0) / 5;
+    const reasons: string[] = [];
+    let score = 0;
+    if (idMatch) {
+      score = 2;
+      reasons.push("memory id");
+    } else {
+      const signal = lexical * 0.7 + precision * 0.1 + ftsScore * 0.05 + project * 0.3 + workLink * 0.35;
+      if (signal <= 0) continue;
+      score = signal + importance * 0.08;
+      if (lexical > 0) reasons.push("lexical");
+      if (precision > 0 && lexical > 0) reasons.push("precision");
+      if (ftsScore > 0) reasons.push("fts5");
+      if (project) reasons.push("project");
+      if (workLink) reasons.push("work id");
+    }
+    ranked.push({
+      ...memory,
+      score,
+      diagnostics: { lexical, precision, fts: ftsScore, importance, project: project || workLink, id_match: idMatch, reasons },
+    });
+  }
+  return ranked
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (b.importance ?? 0) - (a.importance ?? 0) ||
+        TYPE_WEIGHT[b.type] - TYPE_WEIGHT[a.type] ||
+        b.diagnostics.precision - a.diagnostics.precision ||
+        b.updated_at.localeCompare(a.updated_at) ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, limit);
+}
+
+export function rankForRecall(memories: Memory[], query: string, limit: number): RankedMemory[] {
+  const hits = fts5Enabled() ? ftsHits(matchExpression(query)) : [];
+  return rankMemories(memories, query, limit, hits);
 }

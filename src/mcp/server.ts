@@ -6,7 +6,10 @@ import { authenticateConnection } from "../connections.ts";
 import { clearAuthFailures, noteAuthFailure } from "../ratelimit.ts";
 import { createMemory, forgetMemory, listMemories, memoryById, recall, updateMemory } from "../memory/store.ts";
 import { MEMORY_TYPES, type Memory } from "../memory/types.ts";
+import { VERSION } from "../version.ts";
+import { fts5Enabled } from "../memory/fts.ts";
 import { sessionText } from "./norms.ts";
+import { registerWorkTools } from "./work-tools.ts";
 
 const typeSchema = z.enum(MEMORY_TYPES);
 
@@ -17,7 +20,7 @@ function lines(memories: Pick<Memory, "id" | "type" | "space" | "content">[]): s
 
 function buildServer(label: string): McpServer {
   const server = new McpServer(
-    { name: "rolemem", version: "0.3.0" },
+    { name: "rolemem", version: VERSION },
     { instructions: sessionText() },
   );
 
@@ -25,7 +28,7 @@ function buildServer(label: string): McpServer {
     "recall",
     {
       title: "Recall memories",
-      description: "Search active memories by lexical overlap with a query. The session digest is already loaded; call this when it was truncated or you need a tighter match.",
+      description: "Search active memories. Ranking uses lexical overlap, FTS5 when this Node build has it, type, and an exact id or project match. Recency only breaks ties. The session digest is already loaded; call this when it was truncated or you need a tighter match.",
       inputSchema: { query: z.string().min(1).describe("What you need to know"), limit: z.number().int().min(1).max(30).optional() },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -45,7 +48,10 @@ function buildServer(label: string): McpServer {
             source_model: memory.source_model,
             updated_at: memory.updated_at,
             score: memory.score,
+            project: memory.project,
+            diagnostics: memory.diagnostics,
           })),
+          diagnostics: { fts5: fts5Enabled() },
         },
       };
     },
@@ -55,7 +61,7 @@ function buildServer(label: string): McpServer {
     "remember",
     {
       title: "Remember",
-      description: "Save one durable preference, fact, project, or procedure. The same text updates the existing memory instead of inserting a duplicate.",
+      description: "Save one durable preference, fact, project, or procedure. The same text updates the existing memory instead of inserting a duplicate. Text that looks like a credential is refused and not stored.",
       inputSchema: {
         content: z.string().min(1).max(8000),
         type: typeSchema.optional(),
@@ -65,12 +71,17 @@ function buildServer(label: string): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ content, type, space, source_model }) => {
-      const saved = createMemory({ content, type, space, source_model: source_model ?? label, screen: true });
-      const quarantined = saved.memory.status === "quarantined";
-      const text = quarantined
-        ? "Saved to quarantine. It looks like an instruction, so it stays out of the digest until the operator approves it."
-        : `Saved ${saved.memory.id} (${saved.action}).`;
-      return { content: [{ type: "text", text }], structuredContent: { id: saved.memory.id, status: saved.memory.status, action: saved.action } };
+      try {
+        const saved = createMemory({ content, type, space, source_model: source_model ?? label, screen: true });
+        const quarantined = saved.memory.status === "quarantined";
+        const text = quarantined
+          ? "Saved to quarantine. It looks like an instruction, so it stays out of the digest until the operator approves it."
+          : `Saved ${saved.memory.id} (${saved.action}).`;
+        return { content: [{ type: "text" as const, text }], structuredContent: { id: saved.memory.id, status: saved.memory.status, action: saved.action } };
+      } catch (err) {
+        const message = err instanceof HttpError ? err.message : "Remember failed.";
+        return { isError: true, content: [{ type: "text" as const, text: message }] };
+      }
     },
   );
 
@@ -153,6 +164,8 @@ function buildServer(label: string): McpServer {
       };
     },
   );
+
+  registerWorkTools(server, label);
 
   server.registerPrompt(
     "memory",

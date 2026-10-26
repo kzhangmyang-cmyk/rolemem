@@ -59,7 +59,19 @@ test("MCP can recall, remember, update, list, and forget the same store", async 
 
   const tools = await rpc("tools/list", {}, key);
   const names = (tools.data as { result: { tools: { name: string }[] } }).result.tools.map((tool) => tool.name).sort();
-  assert.deepEqual(names, ["forget", "list_memories", "recall", "remember", "update"]);
+  assert.deepEqual(names, [
+    "complete_work",
+    "forget",
+    "get_work",
+    "list_memories",
+    "list_work",
+    "recall",
+    "remember",
+    "resume_work",
+    "start_work",
+    "update",
+    "update_work",
+  ]);
 
   const recalled = await rpc("tools/call", { name: "recall", arguments: { query: "张总什么时候沟通" } }, key);
   const recalledItems = (recalled.data as { result: { structuredContent: { memories: { content: string }[] } } }).result.structuredContent.memories;

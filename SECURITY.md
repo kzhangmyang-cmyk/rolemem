@@ -9,6 +9,8 @@ rolemem stores personal memory in a SQLite file on a machine you run. The operat
 - Deleted memories stay as markers. An older export cannot recreate them. That is a merge rule, not a guarantee against someone who holds the admin token and a newer file.
 - Memories from MCP clients and from pasted ChatGPT, Claude, or Gemini text are matched against a short list of injection phrases. Hits sit in quarantine and are left out of the digest until you approve them. Native JSON import is not screened, because a round-trip of your own archive has to be exact. The list misses rephrased attacks.
 - Optional PII masking exists only on export, and only when `maskPii=1`. It is off by default. It is a regex, not a redaction policy.
+- MCP `remember` refuses text that matches a short list of credential shapes (private keys, `sk-` / `rmk_` tokens, `KEY=value` assignments). The text is not stored. Work notes are stored with those spans replaced by `[redacted]`. The list misses secrets written in prose. Native JSON import is not redacted, because a round-trip of the operator's archive stays exact.
+- Work notes and memories are returned to models as data, with a line that they are not instructions. Injection phrasing in a work note is flagged. It is not a filter that understands meaning. This document is not a penetration test.
 - A per-process rate limit slows loops. It resets on restart, it is not shared across copies of the server, and without `ROLEMEM_TRUST_PROXY=1` every caller shares one bucket.
 
 ## What you have to do
